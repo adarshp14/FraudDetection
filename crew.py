@@ -86,9 +86,9 @@ class FraudDetectionCrew:
                 callback=self.callback
             ),
             Task(
-                description="Calculate risk score and provide justification",
+                description="Calculate risk score and provide justification based on the analysis.",
                 agent=self.risk_assessment_agent,
-                expected_output="Risk score (0-100) with detailed justification",
+                expected_output="A JSON object containing 'risk_score' (0-100) and 'justification' (string). Example: {'risk_score': 65, 'justification': '...'}",
                 callback=self.callback
             ),
             Task(
@@ -98,30 +98,43 @@ class FraudDetectionCrew:
                 callback=self.callback
             ),
             Task(
-                description="Make final decision (Approve/Flag/Block) with clear rationale",
+                description=(
+                    "Review the findings from the previous agents (Data Ingestion, Anomaly Detection, Risk Assessment, Investigation). "
+                    "Make the final decision (Approve, Flag, or Block) based *specifically* on the provided risk score, justification, and investigation report. "
+                    "Provide a clear, concise rationale that **summarizes the key reasons** for the decision, referencing the critical findings from the Risk Assessment and Investigation stages. "
+                    "Output ONLY a JSON object containing the 'decision' word and the final 'rationale' incorporating these key findings."
+                ),
                 agent=self.decision_agent,
-                expected_output="Final decision with detailed rationale",
+                expected_output=(
+                    "A JSON object with keys 'decision' (string: 'Approve', 'Flag', or 'Block') and 'rationale' (string). "
+                    "Example: {\"decision\": \"Flag\", \"rationale\": \"Flagged due to high risk score (75) indicating unusual amount for location, as noted by Risk Assessment. Investigation confirmed lack of user history for such purchases.\"}"
+                ),
                 callback=self.callback
             )
         ]
 
     def process_transaction(self, transaction: Dict[str, Any]) -> Dict[str, Any]:
-        tasks = self.create_tasks(transaction)
+        all_tasks = self.create_tasks(transaction)
+        all_agents = [
+            self.data_ingestion_agent,
+            self.anomaly_detection_agent,
+            self.risk_assessment_agent,
+            self.investigation_agent,
+            self.decision_agent
+        ]
+
         crew = Crew(
-            agents=[
-                self.data_ingestion_agent,
-                self.anomaly_detection_agent,
-                self.risk_assessment_agent,
-                self.investigation_agent,
-                self.decision_agent
-            ],
-            tasks=tasks,
+            agents=all_agents,
+            tasks=all_tasks,
             verbose=True,
             process=Process.sequential
         )
         
         result = crew.kickoff()
+
+        # The final task is expected to return a JSON string 
+        # with "decision" and "rationale"
         return {
-            "decision": result,
+            "decision": result, 
             "transaction": transaction
         } 
