@@ -2,6 +2,7 @@ import streamlit as st
 import time
 from typing import Dict, Any
 from crew import FraudDetectionCrew
+from crewai.tasks.task_output import TaskOutput # Correct import path
 # from flowchart import AgentFlowchart # Not used with current HTML/JS approach
 import json
 from streamlit_lottie import st_lottie
@@ -31,6 +32,8 @@ if 'decision_shown' not in st.session_state:
     st.session_state.decision_shown = False
 if 'agent_states' not in st.session_state:
     st.session_state.agent_states = ["pending"] * 5 # Keep track of each agent's state
+if 'current_callback_agent_index' not in st.session_state: # Add callback index
+    st.session_state.current_callback_agent_index = 0
 
 # UI Setup
 st.set_page_config(
@@ -244,11 +247,12 @@ with st.container():
 
 # Agent Flow Display
 agent_flow_placeholder = st.empty()
+agent_names = ["Data Ingestion", "Anomaly Detection", "Risk Assessment", "Investigation", "Decision"]
 
 def render_agent_flow(states):
     html = '<div class="agent-flow" id="agent-flow">'
     icons = ['👤', '🧠', '📊', '🔍', '⚖️']
-    names = ["Data Ingestion", "Anomaly Detection", "Risk Assessment", "Investigation", "Decision"]
+    # Use the globally defined agent_names
     for i in range(5):
         node_class = "agent-node"
         status_text = states[i].capitalize()
@@ -261,18 +265,22 @@ def render_agent_flow(states):
         html += f'''
             <div class="{node_class}" id="agent-{i}">
                 <div class="agent-icon">{icons[i]}</div>
-                <div class="agent-name">{names[i]}</div>
+                <div class="agent-name">{agent_names[i]}</div>
                 <div class="agent-status {status_class}" id="status-{i}">{status_text}</div>
             </div>
         '''
         if i < 4:
             arrow_class = "arrow"
-            # Arrow active ONLY if the PREVIOUS agent is completed and CURRENT is still pending
-            if states[i] == 'completed' and states[i+1] == 'pending':
+            # Arrow active ONLY if the CURRENT agent is completed
+            if states[i] == 'completed':
                  arrow_class += " active"
+                 # Start next agent processing immediately after current completes
+                 if states[i+1] == 'pending':
+                      st.session_state.agent_states[i+1] = 'processing'
             html += f'<div class="{arrow_class}" id="arrow-{i}">→<div class="data-particle"></div></div>'
 
     html += '</div>'
+    # Use @st.experimental_fragment or similar if available and needed for smooth updates
     agent_flow_placeholder.markdown(html, unsafe_allow_html=True)
 
 # Initial render
@@ -307,13 +315,43 @@ def render_decision(result):
 if st.session_state.decision_shown:
     render_decision(st.session_state.result)
 
+# Define the callback function
+def agent_callback(output: TaskOutput):
+    # Use the counter instead of output.agent
+    agent_index = st.session_state.current_callback_agent_index
+    agent_name = agent_names[agent_index] # Get name for logging
+    print(f"Callback: Agent '{agent_name}' (Index {agent_index}) task finished.")
+
+    try:
+        # Update current agent to completed
+        st.session_state.agent_states[agent_index] = "completed"
+        
+        # If not the last agent, set the next agent to processing
+        next_agent_index = agent_index + 1
+        if next_agent_index < len(agent_names):
+             st.session_state.agent_states[next_agent_index] = "processing"
+             st.session_state.current_callback_agent_index = next_agent_index # Increment counter
+        else:
+             st.session_state.current_callback_agent_index = agent_index # Keep counter at last index if last agent
+
+        # Re-render the flow immediately
+        render_agent_flow(st.session_state.agent_states)
+        # Optionally add a small delay for visual effect if needed
+        # time.sleep(0.5)
+    except IndexError:
+        print(f"Error: Agent index {agent_index} out of bounds.")
+    except Exception as e:
+        print(f"Error in agent_callback: {e}")
+
 # Process Transaction
 if submitted and not st.session_state.processing:
     st.session_state.processing = True
     st.session_state.decision_shown = False
     st.session_state.result = None
-    st.session_state.agent_states = ["pending"] * 5
-    render_agent_flow(st.session_state.agent_states) # Reset flow
+    st.session_state.current_callback_agent_index = 0 # Reset callback index
+    # Reset states: first is processing, others pending
+    st.session_state.agent_states = ["processing"] + ["pending"] * 4
+    render_agent_flow(st.session_state.agent_states) # Initial render with first agent processing
     render_decision(None) # Clear old decision
 
     transaction = {
@@ -322,46 +360,56 @@ if submitted and not st.session_state.processing:
         "description": description
     }
 
-    # Initialize crew
-    crew = FraudDetectionCrew()
+    # Initialize crew with the callback
+    crew = FraudDetectionCrew(callback=agent_callback)
 
-    # Function to update state and re-render
-    def update_state(index, new_status):
-        if 0 <= index < 5:
-            st.session_state.agent_states[index] = new_status
-        render_agent_flow(st.session_state.agent_states)
-        time.sleep(0.1) # Small delay for UI update
+    # Remove the old simulation loop
+    # # Function to update state and re-render
+    # def update_state(index, new_status):
+    #     if 0 <= index < 5:
+    #         st.session_state.agent_states[index] = new_status
+    #     render_agent_flow(st.session_state.agent_states)
+    #     time.sleep(0.1) # Small delay for UI update
 
-    # Process transaction with visual updates
-    with st.spinner("Processing transaction..."):
-        agent_indices = range(5)
-        for i in agent_indices:
-            # Start processing the current agent
-            update_state(i, "processing")
-            time.sleep(1.0) # Simulate processing time
+    # # Process transaction with visual updates
+    # with st.spinner("Processing transaction..."):
+    #     agent_indices = range(5)
+    #     for i in agent_indices:
+    #         # Start processing the current agent
+    #         update_state(i, "processing")
+    #         time.sleep(1.0) # Simulate processing time
 
-            # Complete processing for the current agent
-            # This will trigger the arrow *before* the next agent starts
-            update_state(i, "completed")
-            if i < 4: # Only pause for transfer if not the last agent
-                time.sleep(1.0) # Simulate data transfer time (arrow glow + particle)
-            else:
-                time.sleep(0.1) # Short delay after final agent completes
+    #         # Complete processing for the current agent
+    #         # This will trigger the arrow *before* the next agent starts
+    #         update_state(i, "completed")
+    #         if i < 4: # Only pause for transfer if not the last agent
+    #             time.sleep(1.0) # Simulate data transfer time (arrow glow + particle)
+    #         else:
+    #             time.sleep(0.1) # Short delay after final agent completes
 
-        # Get the actual result from the crew
+    # Call crew.kickoff() directly
+    with st.spinner("AI Agents are analyzing the transaction..."):
         try:
+            # The callback will handle intermediate UI updates
             result = crew.process_transaction(transaction)
             st.session_state.result = result
+            # Ensure final state is rendered correctly after kickoff finishes
+            st.session_state.agent_states = ["completed"] * 5
+            render_agent_flow(st.session_state.agent_states)
             render_decision(result)
             st.session_state.decision_shown = True
         except Exception as e:
             st.error(f"An error occurred during crew processing: {e}")
             # Optionally render an error state
             st.session_state.result = {"decision": "ERROR", "explanation": str(e)}
+            # Ensure final state reflects error, maybe mark all as completed or a specific error state
+            st.session_state.agent_states = ["completed"] * 5 # Or a different error representation
+            render_agent_flow(st.session_state.agent_states)
             render_decision(st.session_state.result)
             st.session_state.decision_shown = True
+        finally:
+            st.session_state.processing = False
 
-    st.session_state.processing = False
-    # Final render to ensure everything is settled
-    render_agent_flow(st.session_state.agent_states)
-    render_decision(st.session_state.result) 
+    # Remove the redundant final render calls as they are handled within try/except
+    # render_agent_flow(st.session_state.agent_states)
+    # render_decision(st.session_state.result) 
