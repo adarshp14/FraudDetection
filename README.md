@@ -50,7 +50,7 @@ The system comprises two main components: the Streamlit frontend and the CrewAI 
 
 ```mermaid
 graph TD
-    A[User Input (Streamlit UI)] --> B(app.py);
+    A[User Input - Streamlit UI] --> B(app.py);
     B -- Process Transaction --> C(crew.py - FraudDetectionCrew);
     C -- Run Agents & Tasks --> D{CrewAI Framework};
     D -- LLM Calls --> E[Google Gemini API];
