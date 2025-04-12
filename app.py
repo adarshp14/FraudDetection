@@ -118,6 +118,7 @@ st.markdown("""
     /* --- Agent Flow Visualization --- */
     .agent-flow {
         display: flex;
+        flex-wrap: wrap; /* Allow nodes to wrap */
         justify-content: center; /* Center align nodes */
         align-items: center;
         gap: 20px; /* Increased gap */
@@ -125,7 +126,7 @@ st.markdown("""
         margin: 30px 0;
         background: linear-gradient(145deg, #222222, #181818); /* Subtle gradient */
         border-radius: 16px;
-        overflow-x: auto;
+        /* overflow-x: auto; Removed, using wrap instead */
         border: 1px solid #333333;
     }
 
