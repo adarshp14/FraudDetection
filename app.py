@@ -368,7 +368,7 @@ with st.container():
     
     # --- Example Data & Pre-fill Buttons ---
     legitimate_example = {
-        "amount": 45.50,
+        "amount": 4.75,
         "location": "San Francisco",
         "description": "Coffee Shop"
     }

@@ -58,9 +58,38 @@ graph TD
     B -- Render UI Updates --> A;
 ```
 
+### Why a Multi-Agent System for Fraud Detection?
+
+Fraud detection is a complex problem often requiring different types of analysis:
+
+*   **Data Validation & Structuring:** Ensuring input data is usable.
+*   **Pattern Recognition:** Identifying deviations from normal behavior (anomalies).
+*   **Risk Quantification:** Assessing the severity of suspicious indicators.
+*   **Contextual Investigation:** Deep-diving into specific details when risk is high.
+*   **Holistic Decision-Making:** Synthesizing all findings into a final judgment.
+
+A single monolithic system or LLM prompt might struggle to perform all these steps reliably and transparently. A multi-agent system allows us to break down the problem into specialized roles, where each agent focuses on a specific sub-task. This leads to:
+
+*   **Modularity:** Easier to develop, test, and maintain individual agents.
+*   **Specialization:** Each agent can be optimized (e.g., with specific instructions or tools) for its particular goal.
+*   **Transparency:** Easier to trace the decision-making process by observing the output of each agent in the sequence.
+*   **Scalability:** Potential to add or modify agents as detection strategies evolve.
+
+### How CrewAI Helps
+
+[CrewAI](https://www.crewai.com/) provides the framework to build and orchestrate this multi-agent system effectively:
+
+*   **Agent Definition:** Simplifies defining agents with distinct roles, goals, backstories, and LLM configurations.
+*   **Task Management:** Allows defining specific tasks and assigning them to the appropriate agents.
+*   **Process Orchestration:** Manages the execution flow between agents (e.g., sequentially, ensuring the output of one task becomes the input for the next).
+*   **LLM Integration:** Handles the communication with the underlying language model (Gemini in this case).
+*   **Collaboration:** Facilitates the passing of context and results between agents.
+
+By leveraging CrewAI, we can focus on defining the *logic* of each agent's role and the overall workflow, rather than building the complex infrastructure for agent communication and task sequencing from scratch.
+
 ### 🤖 Agent Workflow
 
-The `FraudDetectionCrew` orchestrates a sequence of specialized agents:
+The `FraudDetectionCrew` class in `crew.py` uses CrewAI to define and run the sequence of specialized agents detailed below. Each agent performs its task and passes its findings to the next agent in the chain.
 
 ```mermaid
 graph LR
